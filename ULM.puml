@@ -1,0 +1,371 @@
+@startuml Manage Rent Home Application
+
+' ============================================
+' CLASS DIAGRAM - Models
+' ============================================
+
+package "Models Layer" {
+    class RentRecord {
+        .. Thông tin cơ bản ..
+        + room_name: CharField(100)
+        + tenant_name: CharField(100)
+        + month: CharField(20)
+        
+        .. Chi phí cố định ..
+        + rent_price: IntegerField
+        
+        .. Điện ..
+        + old_electric: IntegerField
+        + new_electric: IntegerField
+        + electric_price: IntegerField = 4000
+        
+        .. Chi phí khác ..
+        + water_fee: IntegerField = 0
+        + other_fee: IntegerField = 0
+        
+        .. Metadata ..
+        + created_at: DateTimeField(auto_now_add)
+        
+        .. Methods ..
+        + total_electric(): int
+        + total(): int
+        + __str__(): str
+    }
+}
+
+' ============================================
+' CLASS DIAGRAM - Forms
+' ============================================
+
+package "Forms Layer" {
+    class RentRecordForm {
+        + Meta
+        --
+        + model: RentRecord
+        + fields: '__all__'
+    }
+    
+    RentRecordForm ..> RentRecord : uses
+}
+
+' ============================================
+' CLASS DIAGRAM - Views
+' ============================================
+
+package "Views Layer" {
+    class ViewFunctions <<module>> {
+        + home(request): HttpResponse
+        + add_record(request): HttpResponse
+    }
+    
+    ViewFunctions ..> RentRecord : queries
+    ViewFunctions ..> RentRecordForm : uses
+}
+
+' ============================================
+' CLASS DIAGRAM - Admin
+' ============================================
+
+package "Admin Layer" {
+    class RentRecordAdmin {
+        .. Display Configuration ..
+        + list_display: tuple
+        + readonly_fields: tuple
+        + search_fields: tuple
+        + list_filter: tuple
+        + fieldsets: tuple
+        
+        .. Custom Display Methods ..
+        + rental_breakdown(obj): HTML
+        + total_electric(obj): int/str
+        + total(obj): int/str
+    }
+    
+    RentRecordAdmin --|> "django.contrib.admin.ModelAdmin"
+    RentRecordAdmin ..> RentRecord : manages
+}
+
+' ============================================
+' USE CASE DIAGRAM
+' ============================================
+
+@enduml
+
+@startuml Use Cases
+
+left to right direction
+skinparam packageStyle rectangle
+
+actor "Quản lý nhà trọ" as Manager
+actor "Admin Django" as Admin
+
+rectangle "Manage Rent Home System" {
+    usecase "Xem danh sách\nhóa đơn" as UC1
+    usecase "Thêm hóa đơn\nmới" as UC2
+    usecase "Tìm kiếm\nhóa đơn" as UC3
+    usecase "Lọc theo tháng/\nphòng" as UC4
+    usecase "Xem chi tiết\nthanh toán" as UC5
+    usecase "Quản lý qua\nDjango Admin" as UC6
+}
+
+Manager --> UC1
+Manager --> UC2
+Manager --> UC5
+
+Admin --> UC3
+Admin --> UC4
+Admin --> UC6
+
+UC6 ..> UC1 : includes
+UC6 ..> UC2 : includes
+UC6 ..> UC3 : includes
+UC6 ..> UC4 : includes
+UC6 ..> UC5 : includes
+
+@enduml
+
+@startuml Component Diagram
+
+skinparam componentStyle rectangle
+
+package "Django Application" {
+    
+    package "manage_rent_home (Project)" {
+        component [urls.py] as ProjectUrls
+        component [settings.py] as Settings
+        component [wsgi.py] as WSGI
+    }
+    
+    package "rent_record (App)" {
+        
+        component [Models\n(RentRecord)] as Models
+        component [Views\n(home, add_record)] as Views
+        component [Forms\n(RentRecordForm)] as Forms
+        component [Admin\n(RentRecordAdmin)] as AdminComp
+        component [URLs] as AppUrls
+        
+        package "Templates" {
+            component [home.html] as HomeTemplate
+            component [add_record.html] as AddTemplate
+            component [detail_record.html] as DetailTemplate
+        }
+    }
+    
+    database "SQLite\n(db.sqlite3)" as DB
+}
+
+[Browser] --> WSGI
+WSGI --> ProjectUrls
+ProjectUrls --> AppUrls
+AppUrls --> Views
+Views --> Models
+Views --> Forms
+Views --> HomeTemplate
+Views --> AddTemplate
+Views --> DetailTemplate
+Models --> DB
+Forms --> Models
+AdminComp --> Models
+Settings --> Models
+
+note right of Models
+  Lưu trữ thông tin:
+  - Phòng trọ
+  - Người thuê
+  - Chi phí tháng
+  - Điện nước
+end note
+
+note right of Views
+  Xử lý requests:
+  - Hiển thị danh sách
+  - Thêm hóa đơn mới
+end note
+
+note right of AdminComp
+  Django Admin với:
+  - List display
+  - Search & Filter
+  - Custom breakdown box
+end note
+
+@enduml
+
+@startuml Sequence Diagram - Add Record
+
+actor "Quản lý" as Manager
+participant "Browser" as Browser
+participant "Django URLs" as URLs
+participant "add_record\n(View)" as View
+participant "RentRecordForm" as Form
+participant "RentRecord\n(Model)" as Model
+database "Database" as DB
+
+Manager -> Browser: Truy cập /add/
+Browser -> URLs: GET /add/
+URLs -> View: route to add_record()
+View -> Form: RentRecordForm()
+View -> Browser: render add_record.html
+Browser -> Manager: Hiển thị form
+
+Manager -> Browser: Nhập thông tin\nvà submit
+Browser -> URLs: POST /add/
+URLs -> View: route to add_record()
+View -> Form: RentRecordForm(request.POST)
+View -> Form: is_valid()
+Form -> Form: validate data
+
+alt Form hợp lệ
+    View -> Form: save()
+    Form -> Model: create RentRecord
+    Model -> DB: INSERT
+    DB -> Model: success
+    View -> Browser: redirect to home
+    Browser -> Manager: Hiển thị danh sách
+else Form không hợp lệ
+    View -> Browser: render form với errors
+    Browser -> Manager: Hiển thị lỗi
+end
+
+@enduml
+
+@startuml Sequence Diagram - View in Admin
+
+actor "Admin User" as Admin
+participant "Browser" as Browser
+participant "Django Admin" as DjangoAdmin
+participant "RentRecordAdmin" as AdminClass
+participant "RentRecord\n(Model)" as Model
+database "Database" as DB
+
+Admin -> Browser: Click vào record
+Browser -> DjangoAdmin: GET /admin/.../change/
+DjangoAdmin -> AdminClass: prepare change form
+AdminClass -> Model: get object
+Model -> DB: SELECT
+DB -> Model: return data
+Model -> AdminClass: RentRecord instance
+AdminClass -> AdminClass: rental_breakdown(obj)
+AdminClass -> AdminClass: calculate totals
+AdminClass -> AdminClass: format HTML box
+AdminClass -> DjangoAdmin: rendered form + breakdown
+DjangoAdmin -> Browser: HTML response
+Browser -> Admin: Hiển thị form\nvới breakdown box
+
+note right of AdminClass
+  Breakdown hiển thị:
+  - Tiền trọ
+  - Nước
+  - Điện (chi tiết)
+  - Phí khác
+  - TỔNG CỘNG
+end note
+
+@enduml
+
+@startuml Activity Diagram - Add Rent Record
+
+start
+
+:Người dùng truy cập\ntrang thêm hóa đơn;
+
+:Nhập thông tin:
+- Tên phòng
+- Tên người thuê
+- Tháng;
+
+:Nhập chi phí:
+- Tiền trọ
+- Chỉ số điện cũ/mới
+- Giá điện
+- Tiền nước
+- Phí khác;
+
+:Submit form;
+
+if (Form hợp lệ?) then (yes)
+    :Tính toán:
+    - Tiền điện = (mới - cũ) × giá
+    - Tổng = trọ + điện + nước + khác;
+    
+    :Lưu vào database;
+    
+    :Chuyển về trang\ndanh sách;
+    
+    stop
+else (no)
+    :Hiển thị lỗi;
+    
+    :Quay lại form\nvới dữ liệu đã nhập;
+    
+    stop
+endif
+
+@enduml
+
+@startuml Deployment Diagram
+
+node "Development Server" {
+    component [Django Application] as Django
+    component [SQLite Database] as SQLite
+    
+    Django --> SQLite
+}
+
+node "Client Browser" {
+    component [HTML/CSS] as Frontend
+}
+
+Frontend --> Django : HTTP/HTTPS
+
+note right of Django
+  Port: 8000 (default)
+  WSGI Server
+  Debug Mode: ON
+end note
+
+note left of Frontend
+  Access URLs:
+  - / (home)
+  - /add/ (add record)
+  - /admin/ (Django admin)
+end note
+
+@enduml
+
+@startuml Database Schema
+
+entity "rent_record_rentrecord" as RentRecord {
+    * id : INTEGER <<PK>>
+    --
+    room_name : VARCHAR(100)
+    tenant_name : VARCHAR(100)
+    month : VARCHAR(20)
+    --
+    rent_price : INTEGER
+    --
+    old_electric : INTEGER
+    new_electric : INTEGER
+    electric_price : INTEGER
+    --
+    water_fee : INTEGER
+    other_fee : INTEGER
+    --
+    created_at : DATETIME
+}
+
+note right of RentRecord
+  Primary Key: Auto-increment ID
+  
+  Indexes:
+  - month (for filtering)
+  - room_name (for filtering)
+  - created_at (for ordering)
+  
+  Constraints:
+  - NOT NULL on most fields
+  - Defaults: electric_price=4000,
+    water_fee=0, other_fee=0
+end note
+
+@enduml

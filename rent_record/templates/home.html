@@ -1,0 +1,22 @@
+<h1>Danh sách tiền trọ</h1>
+<a href="{% url 'add_record' %}">+ Thêm mới</a>
+<table border="1" cellpadding="8">
+  <tr>
+    <th>Phòng</th>
+    <th>Người thuê</th>
+    <th>Tháng</th>
+    <th>Tiền thuê</th>
+    <th>Tiền điện</th>
+    <th>Tổng cộng</th>
+  </tr>
+  {% for r in records %}
+  <tr>
+    <td>{{ r.room_name }}</td>
+    <td>{{ r.tenant_name }}</td>
+    <td>{{ r.month }}</td>
+    <td>{{ r.rent_price|floatformat:0 }} đ</td>
+    <td>{{ r.total_electric|floatformat:0 }} đ</td>
+    <td><strong>{{ r.total|floatformat:0 }} đ</strong></td>
+  </tr>
+  {% endfor %}
+</table>

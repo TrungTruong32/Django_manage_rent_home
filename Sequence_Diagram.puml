@@ -1,0 +1,171 @@
+@startuml Sequence Diagram - Home Page
+
+actor "User" as User
+participant "Browser" as Browser
+participant "Django URLs" as URLs
+participant "views.home" as HomeView
+participant "RentRecord.objects" as ORM
+database "SQLite (db.sqlite3)" as DB
+participant "Template Renderer" as Template
+
+User -> Browser: Open /
+Browser -> URLs: GET /
+URLs -> HomeView: route to home(request)
+HomeView -> ORM: RentRecord.objects.all().order_by('-created_at')
+ORM -> DB: SELECT * FROM rent_record_rentrecord ORDER BY created_at DESC
+DB -> ORM: rows
+ORM -> HomeView: QuerySet(records)
+HomeView -> Template: render 'home.html' with records
+Template -> Browser: HTML response
+Browser -> User: Display list of records
+
+@enduml
+
+@startuml Sequence Diagram - Add Record (GET)
+
+actor "User" as User
+participant "Browser" as Browser
+participant "Django URLs" as URLs
+participant "views.add_record (GET)" as AddViewGet
+participant "RentRecordForm" as FormClass
+participant "Template Renderer" as Template
+
+User -> Browser: Open /add/
+Browser -> URLs: GET /add/
+URLs -> AddViewGet: route to add_record()
+AddViewGet -> FormClass: RentRecordForm()
+FormClass -> AddViewGet: empty form instance
+AddViewGet -> Template: render 'add_record.html' with form
+Template -> Browser: HTML response
+Browser -> User: Display empty form
+
+@enduml
+
+@startuml Sequence Diagram - Add Record (POST)
+
+actor "User" as User
+participant "Browser" as Browser
+participant "Django URLs" as URLs
+participant "views.add_record (POST)" as AddViewPost
+participant "RentRecordForm" as FormClass
+participant "RentRecord (Model)" as Model
+database "SQLite (db.sqlite3)" as DB
+
+User -> Browser: Fill form and submit
+Browser -> URLs: POST /add/
+URLs -> AddViewPost: route to add_record()
+AddViewPost -> FormClass: RentRecordForm(request.POST)
+FormClass -> FormClass: is_valid()
+alt valid
+	FormClass -> Model: save()  
+	Model -> DB: INSERT INTO rent_record_rentrecord (...) VALUES (...)
+	DB -> Model: OK
+	AddViewPost -> Browser: redirect('home')
+	Browser -> User: Redirected to /
+else invalid
+	AddViewPost -> Template: render form with errors
+	Template -> Browser: HTML response with errors
+end
+
+@enduml
+
+@startuml Sequence Diagram - Admin: List View
+
+actor "Admin User" as Admin
+participant "Browser" as Browser
+participant "Django Admin (changelist)" as DjangoAdminList
+participant "RentRecordAdmin" as AdminClass
+participant "ORM" as ORM
+database "SQLite (db.sqlite3)" as DB
+
+Admin -> Browser: Open /admin/rent_record/rentrecord/
+Browser -> DjangoAdminList: GET changelist
+DjangoAdminList -> AdminClass: changelist_view(request)
+AdminClass -> ORM: query for records (with search/filters)
+ORM -> DB: SELECT ...
+DB -> ORM: rows
+ORM -> AdminClass: QuerySet
+AdminClass -> DjangoAdminList: render changelist template
+DjangoAdminList -> Browser: HTML response
+Browser -> Admin: Display list with controls
+
+@enduml
+
+@startuml Sequence Diagram - Admin: View/Change Record with Breakdown
+
+actor "Admin User" as Admin
+participant "Browser" as Browser
+participant "Django Admin (change)" as DjangoAdminChange
+participant "RentRecordAdmin" as AdminClass
+participant "RentRecord (Model)" as Model
+database "SQLite (db.sqlite3)" as DB
+
+Admin -> Browser: Click record -> /admin/rent_record/rentrecord/<id>/change/
+Browser -> DjangoAdminChange: GET change view
+DjangoAdminChange -> AdminClass: change_view(request, object_id)
+AdminClass -> Model: RentRecord.objects.get(pk=object_id)
+Model -> DB: SELECT ... WHERE id = object_id
+DB -> Model: row
+Model -> AdminClass: instance obj
+AdminClass -> AdminClass: rental_breakdown(obj)
+note right: rental_breakdown reads fields and computes:
+AdminClass -> Model: (read) old_electric/new_electric/electric_price
+Model --> AdminClass: values
+AdminClass -> AdminClass: compute elec_usage = new-old
+AdminClass -> AdminClass: elec_total = elec_usage * electric_price
+AdminClass -> AdminClass: grand_total = rent + elec_total + water + other
+AdminClass -> DjangoAdminChange: render change form with breakdown HTML
+DjangoAdminChange -> Browser: HTML response
+Browser -> Admin: Show change form + breakdown box
+
+@enduml
+
+@startuml Sequence Diagram - Admin: Add Record via Admin (save readonly fields blank)
+
+actor "Admin User" as Admin
+participant "Browser" as Browser
+participant "Django Admin (add)" as DjangoAdminAdd
+participant "RentRecordAdmin" as AdminClass
+participant "ModelForm" as AdminForm
+participant "RentRecord (Model)" as Model
+database "SQLite (db.sqlite3)" as DB
+
+Admin -> Browser: Open /admin/rent_record/rentrecord/add/
+Browser -> DjangoAdminAdd: GET add view
+DjangoAdminAdd -> AdminClass: add_view(request)
+AdminClass -> AdminForm: get_form()(empty)
+AdminForm -> DjangoAdminAdd: empty admin form
+DjangoAdminAdd -> Browser: HTML response (readonly breakdown empty message)
+Browser -> Admin: Show add form
+
+Admin -> Browser: Submit admin add form
+Browser -> DjangoAdminAdd: POST add view
+DjangoAdminAdd -> AdminForm: Admin form with POST data
+AdminForm -> AdminForm: is_valid()
+alt valid
+	AdminForm -> Model: save()
+	Model -> DB: INSERT
+	AdminForm -> DjangoAdminAdd: redirect to changelist
+else invalid
+	AdminForm -> DjangoAdminAdd: render form with errors
+end
+
+@enduml
+
+@startuml Sequence Diagram - Model Methods
+
+participant "RentRecord instance" as Instance
+participant "Model methods" as Methods
+
+Instance -> Methods: total_electric()
+Methods -> Instance: read new_electric, old_electric, electric_price
+Methods -> Methods: compute (new-old)*price
+Methods -> Instance: return elec_total
+
+Instance -> Methods: total()
+Methods -> Instance: call total_electric()
+Methods -> Methods: compute rent + elec_total + water + other
+Methods -> Instance: return grand_total
+
+@enduml
+
