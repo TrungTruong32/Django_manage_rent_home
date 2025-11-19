@@ -22,10 +22,11 @@ RUN pip install --upgrade pip && \
 # Copy project files
 COPY . /app/
 
-# Run migrations and collect static files
-RUN python manage.py migrate --noinput && \
-    python manage.py collectstatic --noinput && \
-    python create_superuser.py
+# Collect static files only (migrations will run at startup)
+RUN python manage.py collectstatic --noinput
+
+# Make startup script executable
+RUN chmod +x start.sh
 
 # Create a non-root user
 RUN useradd -m myuser && chown -R myuser:myuser /app
@@ -34,5 +35,5 @@ USER myuser
 # Expose port
 EXPOSE 8000
 
-# Run gunicorn
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "3", "manage_rent_home.wsgi:application"]
+# Run startup script
+CMD ["./start.sh"]
