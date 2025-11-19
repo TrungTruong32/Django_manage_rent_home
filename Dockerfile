@@ -22,8 +22,10 @@ RUN pip install --upgrade pip && \
 # Copy project files
 COPY . /app/
 
-# Collect static files
-RUN python manage.py collectstatic --noinput
+# Run migrations and collect static files
+RUN python manage.py migrate --noinput && \
+    python manage.py collectstatic --noinput && \
+    python create_superuser.py
 
 # Create a non-root user
 RUN useradd -m myuser && chown -R myuser:myuser /app

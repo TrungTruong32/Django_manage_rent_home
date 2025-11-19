@@ -27,7 +27,7 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-#qzrklk78atwymfm*mno!
 DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
 # ALLOWED_HOSTS configuration
-allowed_hosts = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1', 'django-manage-rent-home.onrender.com')
+allowed_hosts = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1')
 ALLOWED_HOSTS = [host.strip() for host in allowed_hosts.split(',')]
 
 # Always allow Render domain
